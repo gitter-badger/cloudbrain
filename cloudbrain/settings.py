@@ -9,7 +9,8 @@ AGGREGATES_TABLE_NAME = "aggregates"
 
 # Servers config info
 CASSANDRA_ADDRESS = 'cassandra.cloudbrain.rocks'
-RABBITMQ_ADDRESS = 'rabbitmq.cloudbrain.rocks'
+#RABBITMQ_ADDRESS = 'rabbitmq.cloudbrain.rocks'
+RABBITMQ_ADDRESS = 'localhost'
 WEBSERVER_ADDRESS = 'webserver.cloudbrain.rocks'
 WEBSERVER_PORT = 8080
 
