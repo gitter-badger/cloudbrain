@@ -1,77 +1,97 @@
 import pika
-import json
-from cloudbrain.subscribers.SubscriberInterface import Subscriber
+from cloudbrain.subscribers.SubscriberInterface import SubscriberInterface
 from cloudbrain.utils.metadata_info import get_metrics_names
 from cloudbrain.settings import RABBITMQ_ADDRESS
 
 
-class PikaSubscriber(Subscriber):
-  
-  def __init__(self, device_name, device_id, rabbitmq_address, metric_name):
-    super(PikaSubscriber, self).__init__(device_name, device_id, rabbitmq_address)
+
+class PikaSubscriber(SubscriberInterface):
+  def __init__(self, rabbitmq_address, user, password):
+    super(PikaSubscriber, self).__init__(rabbitmq_address)
+    self.user = user
+    self.password = password
     self.connection = None
-    self.channel = None
-    self.queue_name = None
-    self.metric_name = metric_name
-    
-    
+    self.channels = {}
+
+
   def connect(self):
-    credentials = pika.PlainCredentials('cloudbrain', 'cloudbrain')
+    credentials = pika.PlainCredentials(self.user, self.password)
     self.connection = pika.BlockingConnection(pika.ConnectionParameters(
       host=self.host, credentials=credentials))
-    self.channel = self.connection.channel()
 
-    key = "%s:%s:%s" %(self.device_id,self.device_name, self.metric_name)
-    self.channel.exchange_declare(exchange=key,
-                                  type='direct')
 
-    self.queue_name = self.channel.queue_declare(exclusive=True).method.queue
-    
-    
-    self.channel.queue_bind(exchange=key,
-                   queue=self.queue_name,
-                   routing_key=key)
+  def subscribe(self, routing_key):
+    channel = self.connection.channel()
+    channel.exchange_declare(exchange=routing_key,
+                             type='direct')
+
+    result = channel.queue_declare(exclusive=True)
+    queue_name = result.method.queue
+    channel.queue_bind(exchange=routing_key,
+                       queue=queue_name,
+                       routing_key=routing_key)
+
+    self.channels[routing_key] = [channel, queue_name]
+
 
   def disconnect(self):
-    self.connection.close_file()
-    
-    
-  def consume_messages(self, callback):
-    self.channel.basic_consume(callback,
-                      queue=self.queue_name,
-                      exclusive=True,
-                      no_ack=True)
+    for (routing_key, channel) in self.channels.items():
+      channel[0].stop_consuming()
+    self.connection.close()
 
-    self.channel.start_consuming()
-    
 
-  def get_one_message(self):
-    for method, properties, body in self.channel.consume(self.queue_name, exclusive=True, no_ack=True):
-      return body
+  def consume_messages(self, routing_key, callback):
+    
+    channel = self.channels[routing_key][0]
+    queue_name =  self.channels[routing_key][1]
+
+    channel.basic_consume(callback,
+                          queue=queue_name,
+                          exclusive=True,
+                          no_ack=True)
+
+    channel.start_consuming()
+
+
+
+  def get_one_message(self, routing_key):
+    # for method, properties, body in self.channel.consume(self.queue_name, 
+    #                                                      exclusive=True, 
+    #                                                      no_ack=True):
+    #   return body
+    
+    channel = self.channels[routing_key][0]
+    queue_name =  self.channels[routing_key][1]
+    meth_frame, header_frame, body = channel.basic_get(queue_name)
+    return (meth_frame, header_frame, body)
+
+
 
 def _print_message(ch, method, properties, body):
+  #print ch, method, properties, body
   print body
 
-    
+
+
 if __name__ == "__main__":
 
-  device_id = "test"
-  device_name = "muse"
-  host = RABBITMQ_ADDRESS
-  buffer_size = 100
+  host = "localhost"
+  username = "guest"
+  pwd = "guest"
 
-  metric_names = get_metrics_names(device_name)
+  user = "test"
+  device = "muse"
+  metric = "eeg"
+  routing_key = "%s.%s.%s" % (user, device, metric)
+
+  sub = PikaSubscriber(host, username, pwd)
+  sub.connect()
+  sub.subscribe(routing_key)
+
+  print sub.get_one_message(routing_key)
 
   while 1:
-    for metric in metric_names:
-      print metric
-      subscriber = PikaSubscriber(device_name, device_id, host, metric)
-      subscriber.connect()
-      #subscriber.consume_messages(_print_message)
-      buffer = json.loads(subscriber.get_one_message())
-      for record in buffer:
-        print record
-
-
-
-
+    try:
+      sub.consume_messages(routing_key, _print_message)
+    except KeyboardInterrupt:
+      sub.disconnect()

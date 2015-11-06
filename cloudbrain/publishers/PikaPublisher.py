@@ -1,40 +1,72 @@
 import json
 import pika
 
-from cloudbrain.publishers.PublisherInterface import Publisher
+from cloudbrain.publishers.PublisherInterface import PublisherInterface
 
 
-class PikaPublisher(Publisher):
+
+class PikaPublisher(PublisherInterface):
   """
   Publisher implementation for RabbitMQ via the Pika client
   """
 
-  def __init__(self, device_name, device_id, rabbitmq_address, metric_name):
-    super(PikaPublisher, self).__init__(device_name, device_id, rabbitmq_address)
+
+  def __init__(self, rabbitmq_address, user, password):
+    super(PikaPublisher, self).__init__(rabbitmq_address)
+    self.user = user
+    self.password = password
     self.connection = None
-    self.channel = None
-    self.metric_name = metric_name
+    self.channels = {}
 
-
-  def publish(self, buffer_content):
-    key = "%s:%s:%s" % (self.device_id, self.device_name, self.metric_name)
-    self.channel.basic_publish(exchange=key,
-                               routing_key=key,
-                               body=json.dumps(buffer_content),
-                               properties=pika.BasicProperties(
-                                 delivery_mode=2,  # this makes the message persistent
-                               ))
 
   def connect(self):
-    credentials = pika.PlainCredentials('cloudbrain', 'cloudbrain')
+    credentials = pika.PlainCredentials(self.user, self.password)
 
     self.connection = pika.BlockingConnection(pika.ConnectionParameters(
       host=self.host, credentials=credentials))
-    self.channel = self.connection.channel()
 
-    key = "%s:%s:%s" % (self.device_id, self.device_name, self.metric_name)
-    self.channel.exchange_declare(exchange=key,
-                                  type='direct')
 
   def disconnect(self):
-    self.connection.close_file()
+    for (routing_key, channel) in self.channels.items():
+      if channel:
+        channel.close()
+    self.connection.close()
+
+
+  def register(self, routing_key):
+    channel = self.connection.channel()
+    channel.exchange_declare(exchange=routing_key,
+                             type='direct')
+    self.channels[routing_key] = channel
+
+
+  def publish(self, routing_key, data):
+    self.channels[routing_key].basic_publish(exchange=routing_key,
+                                             routing_key=routing_key,
+                                             body=json.dumps(data),
+                                             properties=pika.BasicProperties(
+                                               delivery_mode=2,
+                                               # makes the message persistent
+                                             ))
+
+
+if __name__ == "__main__":
+  
+  host = "localhost"
+  username = "guest"
+  pwd = "guest"
+  
+  user = "test"
+  device = "muse"
+  metric = "eeg"
+  routing_key = "%s.%s.%s" % (user, device, metric)
+  
+  pub = PikaPublisher(host, username, pwd)
+  pub.connect()
+  pub.register(routing_key)
+  
+  while 1:
+    try:
+      pub.publish(routing_key, "test")
+    except KeyboardInterrupt:
+      pub.disconnect()

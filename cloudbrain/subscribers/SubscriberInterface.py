@@ -1,36 +1,35 @@
 from abc import ABCMeta, abstractmethod
 
-class Subscriber(object):
+
+
+class SubscriberInterface(object):
   __metaclass__ = ABCMeta
-  
-  def __init__(self,  device_name, device_id, host):
-    """
-    
-    :return:
-    """
-    self.device_name = device_name
-    self.device_id = device_id
+
+
+  def __init__(self, host):
     self.host = host
 
-  @abstractmethod
-  def consume_messages(self, callback):
-    #TODO: write doc
-    """
-    
-    :return:
-    """
+
   @abstractmethod
   def connect(self):
-    #TODO: write doc
-    """
-    
-    :return:
-    """
-    
+    pass
+
+
   @abstractmethod
   def disconnect(self):
-    #TODO: write doc
-    """
-    
-    :return:
-    """
+    pass
+
+
+  @abstractmethod
+  def subscribe(self, routing_key):
+    pass
+
+
+  @abstractmethod
+  def consume_messages(self, routing_key, callback):
+    pass
+
+
+  @abstractmethod
+  def get_one_message(self, routing_key):
+    pass

@@ -3,12 +3,12 @@ import sys, os
 import os.path
 import stat
 
-from cloudbrain.publishers.PublisherInterface import Publisher
+from cloudbrain.publishers.PublisherInterface import PublisherInterface
 
 from threading import Lock
 
 
-class PipePublisher(Publisher):
+class PipePublisher(PublisherInterface):
   """
   Publisher implementation for writing data to pipe
   """
