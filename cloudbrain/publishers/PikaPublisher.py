@@ -59,7 +59,7 @@ if __name__ == "__main__":
   user = "test"
   device = "muse"
   metric = "eeg"
-  routing_key = "%s.%s.%s" % (user, device, metric)
+  routing_key = "%s:%s:%s" % (user, device, metric)
   
   pub = PikaPublisher(host, username, pwd)
   pub.connect()
